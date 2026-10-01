@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KlinikeBench: Evaluating Language Models Beyond Diagnostic Accuracy</title>
+<meta name="description" content="KlinikeBench: 333 clinician-authored clinical encounters with a simulated patient, clinical tools and encounter-level scoring. Across 31 models, diagnosis accuracy reaches 90.7% but strict success stays below 30%.">
+<meta property="og:title" content="KlinikeBench: Evaluating Language Models Beyond Diagnostic Accuracy">
+<meta property="og:description" content="333 clinician-authored clinical encounters. Diagnosis accuracy reaches 90.7%, strict success stays below 30%.">
+<meta property="og:image" content="assets/fig1_overview.png">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🩺</text></svg>">
+<style>
+  :root {
+    --ink: #1d2433; --muted: #5b6475; --line: #e3e7ee; --bg: #ffffff; --soft: #f6f8fb;
+    --blue: #2b6cb0; --red: #c0392b; --green: #1f8a5b; --accent: #2b6cb0;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font: 17px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+         color: var(--ink); background: var(--bg); }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, pre { font-family: "SFMono-Regular", Menlo, Consolas, monospace; font-size: 0.86em; }
+  pre { background: #0f1724; color: #e6edf6; padding: 14px 16px; border-radius: 8px; overflow-x: auto; line-height: 1.5; }
+  code { background: var(--soft); padding: 1px 5px; border-radius: 4px; }
+  pre code { background: none; padding: 0; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 22px; }
+  nav { position: sticky; top: 0; z-index: 10; background: rgba(255,255,255,0.94); backdrop-filter: blur(6px);
+        border-bottom: 1px solid var(--line); }
+  nav .wrap { display: flex; gap: 20px; overflow-x: auto; white-space: nowrap; padding-top: 10px; padding-bottom: 10px; font-size: 15px; }
+  nav a { color: var(--muted); }
+  nav a.brand { color: var(--ink); font-weight: 700; margin-right: auto; }
+  header { text-align: center; padding: 64px 0 26px; }
+  header h1 { font-size: 2.2em; max-width: 860px; line-height: 1.2; margin: 0 auto 8px; letter-spacing: -0.01em; }
+  header h1 .kb { color: var(--accent); }
+  header .sub { font-size: 1.28em; color: var(--muted); margin: 0 0 18px; }
+  header .authors { color: var(--muted); margin-bottom: 26px; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 999px; background: #1d2433;
+         color: #fff; font-weight: 600; font-size: 15px; }
+  .btn:hover { background: #2d3a52; text-decoration: none; }
+  .btn.ghost { background: #fff; color: var(--ink); border: 1px solid var(--line); cursor: default; }
+  .stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin: 40px 0 8px; }
+  .stat { background: var(--soft); border-radius: 12px; padding: 16px 12px; text-align: center; }
+  .stat b { display: block; font-size: 1.75em; line-height: 1.2; }
+  .stat span { color: var(--muted); font-size: 0.86em; }
+  .stat.hl b { color: var(--red); }
+  .stat.ok b { color: var(--green); }
+  section { padding: 34px 0 10px; }
+  h2 { font-size: 1.6em; margin: 0 0 14px; padding-top: 10px; border-top: 1px solid var(--line); }
+  h3 { font-size: 1.15em; margin: 26px 0 8px; }
+  figure { margin: 22px 0; text-align: center; }
+  figure img { max-width: 100%; height: auto; border-radius: 6px; }
+  figcaption { color: var(--muted); font-size: 0.9em; margin-top: 8px; text-align: left; }
+  .abstract { background: var(--soft); border-radius: 12px; padding: 20px 24px; text-align: justify; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: start; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } header h1 { font-size: 1.7em; } .stats { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 420px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+  table { border-collapse: collapse; width: 100%; font-size: 0.93em; }
+  th, td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+  th { font-weight: 600; background: var(--soft); }
+  th.sort { cursor: pointer; user-select: none; }
+  th.sort:hover { color: var(--accent); }
+  th.sort.active::after { content: " ▼"; font-size: 0.75em; }
+  th.sort.active.asc::after { content: " ▲"; }
+  td .bar { display: inline-block; height: 8px; border-radius: 4px; background: var(--accent); vertical-align: middle; margin-left: 8px; opacity: 0.75; }
+  td .fam { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 14px; }
+  .chip { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 4px 12px; font-size: 14px; cursor: pointer; }
+  .chip.on { background: #1d2433; color: #fff; border-color: #1d2433; }
+  .gates { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 14px 0; }
+  .gate { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 0.93em; }
+  .gate b { display: block; margin-bottom: 4px; }
+  .res { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .card { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .card b { display: block; }
+  .card p { margin: 4px 0 8px; color: var(--muted); font-size: 0.92em; }
+  .note { font-size: 0.88em; color: var(--muted); }
+  .warn { background: #fff7e6; border: 1px solid #f3d28b; border-radius: 10px; padding: 10px 14px; font-size: 0.92em; }
+  footer { color: var(--muted); font-size: 0.88em; border-top: 1px solid var(--line); margin-top: 40px; padding: 26px 0 50px; }
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <a class="brand" href="#">🩺 KlinikeBench</a>
+  <a href="#overview">Overview</a>
+  <a href="#leaderboard">Leaderboard</a>
+  <a href="#training">SFT &amp; RL</a>
+  <a href="#start">Get started</a>
+  <a href="#citation">Citation</a>
+</div></nav>
+
+<div class="wrap">
+
+<header>
+  <h1><span class="kb">KlinikeBench</span>: Evaluating Language Models Beyond Diagnostic Accuracy</h1>
+  <p class="sub">333 clinician-authored clinical encounters with a simulated patient, clinical tools and encounter-level scoring</p>
+  <div class="buttons">
+    <a class="btn" href="https://arxiv.org/abs/2609.38480">📄 Paper (arXiv)</a>
+    <a class="btn" href="https://hub.harborframework.com/datasets/klinikebench/klinikebench">⚓ Benchmark (Harbor Hub)</a>
+    <a class="btn" href="https://github.com/Zehui127/klinikebench-train">💻 SFT &amp; RL code</a>
+    <a class="btn" href="https://huggingface.co/datasets/anon-caa-neurips/KLINIKEBENCH-Trajectories">🗂️ 13,962 trajectories</a>
+    <a class="btn" href="https://huggingface.co/anon-caa-neurips/qwen3-4b-clinical-long-bench-grpo">🤗 Models</a>
+    <a class="btn" href="https://huggingface.co/spaces/anon-caa-neurips/klinikebench-demo">🎮 Live demo</a>
+  </div>
+</header>
+
+<section id="overview">
+  <figure>
+    <img src="assets/fig1_overview.png" alt="How models are evaluated in KlinikeBench">
+    <figcaption><b>How models are evaluated.</b> A clinician authors the patient profile and a hidden scoring key. The
+    evaluated agent interacts with an LLM-simulated patient and executes clinical tools in a sandbox; the verifier scores
+    the transcript for diagnosis, required tool use, action constraints and must-ask coverage. This example fails: the
+    diagnosis is wrong and required tools and history topics are missed.</figcaption>
+  </figure>
+</section>
+
+
+<section id="leaderboard">
+  <h2>Leaderboard</h2>
+  <p>Results for all 31 models on the 333 tasks (Table 7 of the paper). Click a column to sort; filter by family.
+  Patient simulator and must-ask judge: GPT-5.4-mini.</p>
+  <div class="filters" id="filters"></div>
+  <div style="overflow-x:auto">
+  <table id="lb">
+    <thead><tr>
+      <th>Model</th>
+      <th class="sort active" data-k="pass">Strict pass@1</th>
+      <th class="sort" data-k="dx">Diagnosis</th>
+      <th class="sort" data-k="tools">Required tools</th>
+      <th class="sort" data-k="ask">Must-ask</th>
+    </tr></thead>
+    <tbody></tbody>
+  </table>
+  </div>
+  <p class="note">Scores in %. Across all 31 models, mean diagnosis accuracy is 73.6%, against 13.4% strict success and
+  27.9% required-tool completion. Different models lead different gates: Gemini-3.8-flash on required tools (53.8%),
+  GPT-5.6-sol on must-ask coverage (90.8%).</p>
+</section>
+
+
+<section id="training">
+  <h2>Training a small clinician: SFT &amp; RL</h2>
+  <p>Every task is a standalone Harbor sandbox, so KlinikeBench can also be used for RL. We fine-tune <b>Qwen3-4B</b>
+  on frontier-model trajectories that pass every gate on 283 training tasks, then run GRPO with a diagnosis-only or a
+  multi-gate reward, and evaluate on 50 held-out tasks.</p>
+  <table style="max-width:680px">
+    <thead><tr><th>Stage</th><th>Strict pass@1</th><th>Diagnosis</th><th>Required tools</th><th>Must-ask</th></tr></thead>
+    <tbody>
+      <tr><td>Qwen3-4B (base)</td><td>0.0</td><td>26.0</td><td>3.0</td><td>39.7</td></tr>
+      <tr><td>SFT</td><td>8.0</td><td>39.0</td><td>33.0</td><td>77.5</td></tr>
+      <tr><td>SFT + RL (diagnosis)</td><td>10.0</td><td>44.0</td><td>32.0</td><td>76.8</td></tr>
+      <tr><td>SFT + RL (multi-gate)</td><td>6.0</td><td>42.0</td><td>32.0</td><td>73.1</td></tr>
+    </tbody>
+  </table>
+  <p class="note">% on the 50 held-out tasks; RL rows at step 30.</p>
+  <figure><img src="assets/fig11_grpo_gates.png" alt="Qwen3-4B gate trajectories during GRPO"><figcaption>Qwen3-4B gate
+  trajectories through GRPO step 50: training means (solid, &plusmn;SD) and held-out results (dashed, &plusmn;SE), with the
+  zero-shot and SFT baselines.</figcaption></figure>
+</section>
+
+
+<section id="start">
+  <h2>Get started</h2>
+  <h3>Evaluate a model</h3>
+  <pre><code>uv tool install harbor                  # Harbor &ge; 0.21
+export OPENAI_API_KEY=...               # patient simulator + must-ask judge (gpt-5.4-mini)
+harbor run -d klinikebench/klinikebench -a terminus-2 -m &lt;provider/model&gt;</code></pre>
+  <p>Only the 50 held-out tasks (ids from the training repo's <code>splits/</code>):</p>
+  <pre><code>harbor run -d klinikebench/klinikebench $(sed 's|^|-i klinikebench/|' splits/heldout_task_ids.txt) \
+    -a terminus-2 -m &lt;provider/model&gt;</code></pre>
+  <div class="warn">Harbor passes the patient's API key into the task container, where the agent can read it. For
+  leaderboard-grade runs, put the key behind a host-side proxy
+  (<a href="https://github.com/Zehui127/klinikebench-train#2-start-the-key-proxy">keyproxy</a>).</div>
+  <h3>Train</h3>
+  <pre><code>git clone https://github.com/Zehui127/klinikebench-train &amp;&amp; cd klinikebench-train
+./setup/install_skyrl.sh                                   # pinned SkyRL + patch + lockfile
+REWARD_MODE=multigate NUM_GPUS=4 ./scripts/train_grpo.sh   # GRPO from the released SFT checkpoint</code></pre>
+  <p>See the <a href="https://github.com/Zehui127/klinikebench-train">training README</a> for SFT, task preparation, the
+  key proxy and evaluation.</p>
+</section>
+
+<section id="citation">
+  <h2>Citation</h2>
+  <pre><code>@misc{fang2026klinikebench,
+  title         = {KlinikeBench: Evaluating Language Models Beyond Diagnostic Accuracy},
+  author        = {Fang, Xueting and Li, Zehui and Yang, Yang and Giovino, Camilla and Patel, Shubh K. and
+                   Prajapati, Shailly and Subasri, Vallijah and Shan, Caihua},
+  year          = {2026},
+  eprint        = {2609.38480},
+  archivePrefix = {arXiv},
+  url           = {https://arxiv.org/abs/2609.38480}
+}</code></pre>
+</section>
+
+<footer>
+  KlinikeBench is for research use only. It is not a medical device, and a model that scores well here is not safe for
+  clinical use. Patients in the benchmark are simulated by LLMs; no real patient data is included.
+</footer>
+</div>
+
+<script>
+const FAM = {Claude:"#d97757", GPT:"#10a37f", Gemini:"#4285f4", Grok:"#555", DeepSeek:"#4d6bfe", Kimi:"#8b5cf6", GLM:"#e11d48"};
+const ROWS = [
+  ["Claude Opus 5","Claude",29.4,90.7,44.1,89.9],["Claude Opus 5.5","Claude",28.8,90.7,49.8,84.4],
+  ["Claude Opus 4.8","Claude",16.8,89.2,27.9,85.5],["Claude Sonnet 5","Claude",13.8,87.4,24.0,85.1],
+  ["Claude Sonnet 4.5","Claude",9.9,82.3,25.8,76.7],["Claude Sonnet 4.6","Claude",8.4,83.8,22.8,73.8],
+  ["Claude Haiku 4.5","Claude",2.7,72.1,8.1,70.6],
+  ["GPT-6-astra","GPT",24.3,87.4,39.3,88.0],["GPT-5.6-sol","GPT",23.7,86.2,36.6,90.8],["GPT-5.4","GPT",23.4,80.2,53.2,73.5],
+  ["GPT-5.5","GPT",16.8,86.2,30.0,87.5],["GPT-5.4-mini","GPT",15.9,73.9,35.1,80.6],["GPT-5.1","GPT",15.3,73.9,25.2,89.6],
+  ["GPT-5.6-terra","GPT",8.4,84.7,19.5,85.6],["GPT-5.6-luna","GPT",7.5,81.1,16.2,84.4],["GPT-4.1","GPT",7.5,74.2,12.6,89.1],
+  ["GPT-4o","GPT",3.9,66.4,12.9,79.5],["GPT-5.3-codex","GPT",3.6,84.4,8.7,78.3],["GPT-4.1-mini","GPT",2.1,71.2,6.9,83.1],
+  ["GPT-4.1-nano","GPT",0.9,55.6,9.0,56.9],["GPT-4o-mini","GPT",0.6,51.4,6.6,68.6],
+  ["Gemini-3.8-flash","Gemini",18.9,80.8,53.8,76.5],["Gemini-3.5-flash","Gemini",15.6,75.7,43.8,76.6],
+  ["Gemini-3.7-flash","Gemini",10.8,79.9,53.5,67.1],
+  ["Grok-4.7","Grok",22.2,83.2,35.1,87.5],["Grok-4.6","Grok",21.9,81.4,36.9,89.0],["Grok-4.3","Grok",21.3,77.8,45.6,83.3],
+  ["DeepSeek-v4-pro","DeepSeek",8.1,29.4,13.8,87.8],["DeepSeek-v4-flash","DeepSeek",3.9,18.0,9.3,81.3],
+  ["Kimi-K2.6","Kimi",23.4,77.2,48.7,84.7],["GLM-5.1","GLM",4.8,24.9,10.8,30.8]
+].map(r => ({name:r[0], fam:r[1], pass:r[2], dx:r[3], tools:r[4], ask:r[5]}));
+const KEYS = ["pass","dx","tools","ask"];
+const best = Object.fromEntries(KEYS.map(k => [k, Math.max(...ROWS.map(r => r[k]))]));
+let sortKey = "pass", asc = false, fams = new Set(Object.keys(FAM));
+
+function render() {
+  const rows = ROWS.filter(r => fams.has(r.fam)).sort((a, b) => (asc ? 1 : -1) * (a[sortKey] - b[sortKey]));
+  document.querySelector("#lb tbody").innerHTML = rows.map(r => `<tr><td><span class="fam" style="background:${FAM[r.fam]}"></span>${r.name}</td>` +
+    KEYS.map(k => `<td>${r[k] === best[k] ? "<b>" + r[k].toFixed(1) + "</b>" : r[k].toFixed(1)}` +
+      (k === sortKey ? `<span class="bar" style="width:${Math.round(r[k] * 0.9)}px"></span>` : "") + `</td>`).join("") + `</tr>`).join("");
+  document.querySelectorAll("th.sort").forEach(th => { th.classList.toggle("active", th.dataset.k === sortKey); th.classList.toggle("asc", th.dataset.k === sortKey && asc); });
+}
+document.querySelectorAll("th.sort").forEach(th => th.onclick = () => {
+  if (sortKey === th.dataset.k) asc = !asc; else { sortKey = th.dataset.k; asc = false; }
+  render();
+});
+const f = document.getElementById("filters");
+Object.keys(FAM).forEach(name => {
+  const c = document.createElement("span");
+  c.className = "chip on"; c.innerHTML = `<span class="fam" style="background:${FAM[name]};display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px"></span>${name}`;
+  c.onclick = () => { fams.has(name) ? fams.delete(name) : fams.add(name); c.classList.toggle("on"); render(); };
+  f.appendChild(c);
+});
+render();
+</script>
+</body>
+</html>
